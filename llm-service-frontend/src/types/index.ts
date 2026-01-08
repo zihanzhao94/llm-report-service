@@ -7,7 +7,7 @@ export interface ReportResponse {
   id: string;
   reportResult: string;
   status: TaskStatus;
-  createAt: string // double check with backend type
+  createAt: string
 }
 
 export type TaskStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';

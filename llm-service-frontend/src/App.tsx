@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 import type { TaskStatus, ReportRequest, ReportResponse } from './types'
-import { submitReport, getReport } from './api/reports'
+import { submitReport, getReport, getAllReports } from './api/reports'
 
 function App() {
   const [inputText, setInputText] = useState('')
@@ -9,16 +9,19 @@ function App() {
   const [taskStatus, setTaskStatus] = useState<TaskStatus>('PENDING')
   const [report, setReport] = useState<ReportResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [allReports, setAllReports] = useState<ReportResponse[] | null>(null)
+
+  const resultRef = useRef<HTMLDivElement>(null)
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Prevent empty submission
     if (inputText.trim() === '') {
       return
     }
-    
+
     // Prevent duplicate submission
     if (taskStatus === 'PROCESSING') {
       return
@@ -34,12 +37,12 @@ function App() {
       const request: ReportRequest = {
         userInput: inputText,
       }
-      
+
       const response = await submitReport(request)
       setTaskId(response.id)
       setTaskStatus(response.status)
       setReport(response)
-      window.alert(`Submitted task ID: ${response.id}`)      
+      window.alert(`Submitted task ID: ${response.id}`)
       // If status is PROCESSING immediately after submission, polling will start automatically
     } catch (err) {
       console.error('Error submitting report:', err)
@@ -59,14 +62,17 @@ function App() {
     const pollReport = async () => {
       try {
         const response = await getReport(taskId)
+        const allReportsResponse = await getAllReports()
+        setAllReports(allReportsResponse)
         setTaskStatus(response.status)
         setReport(response)
-        
+
         // If task is COMPLETED or FAILED, polling will stop naturally (useEffect will re-run and return)
       } catch (err) {
         console.error('Error polling report:', err)
         setError('FAILED to fetch report status')
         setTaskStatus('FAILED')
+        setAllReports(null)
       }
     }
 
@@ -82,6 +88,31 @@ function App() {
     }
   }, [taskId, taskStatus])
 
+  // Fetch all reports on mount
+  useEffect(() => {
+    const fetchAllReports = async () => {
+      try {
+        const response = await getAllReports()
+        setAllReports(response)
+      } catch (err) {
+        console.error('Error fetching all reports:', err)
+      }
+    }
+    fetchAllReports()
+  }, [])
+
+  // Handle view report
+  const handleViewReport = (report: ReportResponse) => {
+    setTaskId(report.id)
+    setTaskStatus(report.status as TaskStatus)
+    setReport(report)
+
+    // Scroll to result after a short delay to allow render
+    setTimeout(() => {
+      resultRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+  }
+
   // Reset form
   const handleReset = () => {
     setInputText('')
@@ -89,6 +120,9 @@ function App() {
     setTaskStatus('PENDING')
     setReport(null)
     setError(null)
+    setAllReports(null)
+    // Refetch reports to ensure list is up to date
+    getAllReports().then(setAllReports).catch(console.error)
   }
 
   return (
@@ -115,7 +149,7 @@ function App() {
               disabled={taskStatus === 'PROCESSING'}
             />
           </div>
-          
+
           <div className="flex gap-4">
             <button
               type="submit"
@@ -124,7 +158,7 @@ function App() {
             >
               {taskStatus === 'PROCESSING' ? 'PROCESSING...' : 'Submit'}
             </button>
-            
+
             {(taskStatus === 'COMPLETED' || taskStatus === 'FAILED' || error) && (
               <button
                 type="button"
@@ -141,28 +175,27 @@ function App() {
         {(taskId || taskStatus !== 'PENDING' || error) && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Task Status</h2>
-            
+
             {error && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
                 <p className="text-red-800">{error}</p>
               </div>
             )}
-            
+
             {taskId && (
               <div className="mb-2">
                 <span className="text-sm text-gray-600">Task ID: </span>
                 <span className="text-sm font-mono text-gray-900">{taskId}</span>
               </div>
             )}
-            
+
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700">Status: </span>
-              <span className={`text-sm font-semibold ${
-                taskStatus === 'PENDING' ? 'text-gray-500' :
+              <span className={`text-sm font-semibold ${taskStatus === 'PENDING' ? 'text-gray-500' :
                 taskStatus === 'PROCESSING' ? 'text-blue-600' :
-                taskStatus === 'COMPLETED' ? 'text-green-600' :
-                'text-red-600'
-              }`}>
+                  taskStatus === 'COMPLETED' ? 'text-green-600' :
+                    'text-red-600'
+                }`}>
                 {taskStatus === 'PENDING' && 'PENDING'}
                 {taskStatus === 'PROCESSING' && 'PROCESSING...'}
                 {taskStatus === 'COMPLETED' && 'COMPLETED'}
@@ -181,14 +214,14 @@ function App() {
           let parsedResult;
           try {
             parsedResult = JSON.parse(report.reportResult);
-          } catch (e) {
+          } catch {
             parsedResult = null;
           }
 
           return (
-            <div className="bg-white rounded-lg shadow-md p-6">
+            <div ref={resultRef} className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Report Result</h2>
-              
+
               {parsedResult ? (
                 <div className="space-y-6">
                   {/* Summary Section */}
@@ -217,7 +250,7 @@ function App() {
                     <h3 className="text-sm font-semibold text-gray-700 mb-2">Confidence Score</h3>
                     <div className="flex items-center gap-3">
                       <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
-                        <div 
+                        <div
                           className="bg-linear-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
                           style={{ width: `${(parsedResult.confidence_score || 0) * 100}%` }}
                         ></div>
@@ -246,6 +279,33 @@ function App() {
             </div>
           );
         })()}
+
+        {/* show all reports */}
+        {allReports && allReports.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">All Reports</h2>
+            <ul className="space-y-2">
+              {[...allReports]
+                .sort((a, b) => new Date(b.createAt).getTime() - new Date(a.createAt).getTime())
+                .map((report: ReportResponse) => (
+                  <li key={report.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-900">Task {report.id}</span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(report.createAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleViewReport(report)}
+                      className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                    >
+                      View
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   )

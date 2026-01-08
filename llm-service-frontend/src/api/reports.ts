@@ -14,3 +14,9 @@ export const getReport = async (taskId: string): Promise<ReportResponse> => {
   const response = await apiClient.get<ReportResponse>(`/api/reports/${taskId}`);
   return response.data;
 }
+
+// Get all reports from backend
+export const getAllReports = async (): Promise<ReportResponse[]> => {
+  const response = await apiClient.get<ReportResponse[]>(`/api/reports`);
+  return response.data;
+}

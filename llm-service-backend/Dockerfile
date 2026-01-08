@@ -1,14 +1,28 @@
-# 1. base image
-FROM eclipse-temurin:21-jre
+# Stage 1: Build the application
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 
-# 2. working dir
-WORKDIR /llm-report-service
+WORKDIR /app
 
-# 3. copy generated jar
-COPY target/*.jar app.jar
+# Copy pom.xml and source code
+COPY pom.xml .
 
-# 4. expose port
+# Download dependencies separately to leverage Docker cache
+RUN mvn dependency:go-offline -B
+
+# Copy source code and build
+COPY src ./src
+RUN mvn package -DskipTests
+
+# Stage 2: Run the application
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# Copy the jar file from the builder stage
+COPY --from=builder /app/target/*.jar app.jar
+
+# Expose port
 EXPOSE 8080
 
-# 5. docker run command
+# Run the application
 CMD ["java", "-jar", "app.jar"]
