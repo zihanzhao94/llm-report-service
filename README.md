@@ -2,6 +2,19 @@
 
 This is a Monorepo for an LLM-based intelligent report generation system, containing a complete backend service and frontend interface.
 
+## 💡 Project Concept
+
+**LLM Report Service** is an intelligent document analysis and report generation system powered by Large Language Models (LLM). It automates the process of extracting insights from raw text and presenting them in a structured, easy-to-read format.
+
+### Problems We Solve
+1.  **Information Overload**: Parsing through large amounts of text to find key information is time-consuming.
+    *   *Solution*: Automatically summarizes content and extracts key points using AI.
+2.  **Lack of Standardization**: Manual reports often vary in quality and format.
+    *   *Solution*: Generates consistent, structured JSON outputs with standard fields (Summary, Key Points, Confidence Score).
+3.  **Slow Turnaround**: Waiting for manual analysis delays decision-making.
+    *   *Solution*: Asynchronous background processing + Redis caching ensures rapid response times and high availability.
+4.  **Integration Complexity**: connecting AI models to legacy systems is hard.
+    *   *Solution*: A clean, dockeriazed microservice architecture with standard RESTful APIs.
 ## 🛠 Tech Stack
 
 ### Frontend
