@@ -29,7 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * @since 1.0
  */
 @Service
-public class llmService {
+public class LlmService {
 
     public String generateReport(String userInput) {
 

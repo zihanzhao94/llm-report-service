@@ -32,17 +32,17 @@ import java.util.List;
 @Slf4j
 @Service
 public class ReportService {
-    private ReportTaskRepository reportTaskRepository;
-    private llmService llmService;
+    private final ReportTaskRepository reportTaskRepository;
+    private final AsyncProcessService asyncProcessService;
 
     /**
      * Constructs a new ReportService with the specified repository.
      *
      * @param theReportTaskRepository the repository for report task data access
      */
-    public ReportService(ReportTaskRepository theReportTaskRepository, llmService theLlmService) {
+    public ReportService(ReportTaskRepository theReportTaskRepository, AsyncProcessService theAsyncProcessService) {
         reportTaskRepository = theReportTaskRepository;
-        llmService = theLlmService;
+        asyncProcessService = theAsyncProcessService;
     }
 
     /**
@@ -83,10 +83,9 @@ public class ReportService {
         ReportTask saved = reportTaskRepository.save(task);
 
         // wake up async processing
-        processReport(saved.getId());
+        asyncProcessService.processReport(saved.getId());
 
         // return ReportResponse use database data for id and to avoid discrepencies
-
         ReportResponse response = new ReportResponse();
         response.setId(saved.getId());
         response.setStatus(saved.getStatus().name()); // convert enum to string
@@ -108,7 +107,7 @@ public class ReportService {
      *         report result
      * @throws RuntimeException if the task with the given ID is not found
      */
-    @Cacheable(value = "REPORT_CACHE", key = "taskId")
+    @Cacheable(value = "REPORT_CACHE", key = "#taskId")
     public ReportResponse getResponse(long taskId) {
         // check if task is found
         ReportTask task = reportTaskRepository.findById(taskId)
@@ -120,64 +119,6 @@ public class ReportService {
         response.setCreateAt(task.getCreateAt());
         response.setReportResult(task.getReportResult());
         return response;
-    }
-
-    /**
-     * Asynchronously processes a report generation task by calling the LLM service.
-     * <p>
-     * This method is executed asynchronously to avoid blocking the HTTP request
-     * thread.
-     * It performs the following steps:
-     * <ol>
-     * <li>Retrieves the task from the database</li>
-     * <li>Updates the task status to PROCESSING</li>
-     * <li>Calls the LLM service to generate the report</li>
-     * <li>Updates the task status to COMPLETED and saves the result</li>
-     * <li>On failure, updates the task status to FAILED</li>
-     * </ol>
-     * <p>
-     * The task status transitions: PENDING → PROCESSING → COMPLETED (or FAILED)
-     *
-     * @param taskId the unique identifier of the task to process
-     * @throws RuntimeException if the task with the given ID is not found
-     */
-    @Async
-    public void processReport(long taskId) {
-
-        System.out.println("Async thread start!");
-
-        // get task according to taskId
-        ReportTask task = reportTaskRepository.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
-
-        // check any procedure in execution lead to fail
-        try {
-            // Change status to PROCESSING
-            task.setStatus(ReportTask.TaskStatus.PROCESSING);
-            reportTaskRepository.save(task);
-
-            // execute llm logic
-            String result = llmService.generateReport(task.getUserInput());
-
-            // mock
-            // Thread.sleep(5000);
-            // String result = "Create llm with task id" + taskId;
-
-            // update status to completed (set entity object)
-            task.setStatus(ReportTask.TaskStatus.COMPLETED);
-            task.setReportResult(result);
-
-            // update entity changes to the database
-            reportTaskRepository.save(task);
-
-        } catch (Exception e) { // handle exception when task failed
-            System.out.println("report task creation failure: " + e);
-            System.out.println("OPENAI_API_KEY = " + System.getenv("OPENAI_API_KEY"));
-            task.setStatus(ReportTask.TaskStatus.FAILED);
-            reportTaskRepository.save(task);
-
-        }
-
     }
 
     public List<ReportResponse> getAllResponse() {

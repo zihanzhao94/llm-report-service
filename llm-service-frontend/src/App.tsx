@@ -1,37 +1,24 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 
-import type { TaskStatus, ReportRequest, ReportResponse } from './types'
-import { submitReport, getReport, getAllReports } from './api/reports'
+import type { ReportRequest, ReportResponse } from './types'
+import { submitReport, getAllReports } from './api/reports'
 
 function App() {
   const [inputText, setInputText] = useState('')
-  const [taskId, setTaskId] = useState<string | null>(null)
-  const [taskStatus, setTaskStatus] = useState<TaskStatus>('PENDING')
-  const [report, setReport] = useState<ReportResponse | null>(null)
+  const [expandedReportId, setExpandedReportId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [allReports, setAllReports] = useState<ReportResponse[] | null>(null)
-
-  const resultRef = useRef<HTMLDivElement>(null)
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Prevent empty submission
     if (inputText.trim() === '') {
-      return
-    }
-
-    // Prevent duplicate submission
-    if (taskStatus === 'PROCESSING') {
       return
     }
 
     // Reset state
     setError(null)
-    setReport(null)
-    setTaskId(null)
-    setTaskStatus('PENDING')
 
     try {
       const request: ReportRequest = {
@@ -39,102 +26,127 @@ function App() {
       }
 
       const response = await submitReport(request)
-      setTaskId(response.id)
-      setTaskStatus(response.status)
-      setReport(response)
       window.alert(`Submitted task ID: ${response.id}`)
-      // If status is PROCESSING immediately after submission, polling will start automatically
+      setInputText('')
+
+      // Refresh list immediately
+      const updatedReports = await getAllReports()
+      setAllReports(updatedReports)
+
+      // Auto-expand the new task
+      setExpandedReportId(response.id)
+
     } catch (err) {
       console.error('Error submitting report:', err)
       setError('Submission FAILED, please try again')
-      setTaskStatus('PENDING')
     }
   }
 
-  // Poll task status with useEffect
+  // Poll ALL reports if any is processing
   useEffect(() => {
-    // Poll until task completes or fails(only when PENDING and PROCESSING)
-    if (!taskId || taskStatus === 'COMPLETED' || taskStatus === 'FAILED') {
+    // Check if we need to poll (if any report is processing)
+    const hasProcessingTasks = allReports?.some(r => r.status === 'PROCESSING' || r.status === 'PENDING');
+
+    if (!hasProcessingTasks) {
       return
     }
 
-    // Define async polling function
-    const pollReport = async () => {
-      try {
-        const response = await getReport(taskId)
-        const allReportsResponse = await getAllReports()
-        setAllReports(allReportsResponse)
-        setTaskStatus(response.status)
-        setReport(response)
-
-        // If task is COMPLETED or FAILED, polling will stop naturally (useEffect will re-run and return)
-      } catch (err) {
-        console.error('Error polling report:', err)
-        setError('FAILED to fetch report status')
-        setTaskStatus('FAILED')
-        setAllReports(null)
-      }
-    }
-
-    // Execute once immediately
-    pollReport()
-
-    // Poll every 2 seconds
-    const intervalId = setInterval(pollReport, 2000)
-
-    // Cleanup function: clear interval when component unmounts or dependencies change
-    return () => {
-      clearInterval(intervalId)
-    }
-  }, [taskId, taskStatus])
-
-  // Fetch all reports on mount
-  useEffect(() => {
-    const fetchAllReports = async () => {
+    const pollAllReports = async () => {
       try {
         const response = await getAllReports()
         setAllReports(response)
       } catch (err) {
-        console.error('Error fetching all reports:', err)
+        console.error('Error polling reports:', err)
       }
     }
-    fetchAllReports()
+
+    const intervalId = setInterval(pollAllReports, 2000)
+    return () => clearInterval(intervalId)
+  }, [allReports])
+
+  // Fetch initial data
+  useEffect(() => {
+    getAllReports().then(setAllReports).catch(console.error)
   }, [])
 
-  // Handle view report
-  const handleViewReport = (report: ReportResponse) => {
-    setTaskId(report.id)
-    setTaskStatus(report.status as TaskStatus)
-    setReport(report)
-
-    // Scroll to result after a short delay to allow render
-    setTimeout(() => {
-      resultRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, 100)
+  // Toggle report view
+  const toggleReport = (id: string) => {
+    if (expandedReportId === id) {
+      setExpandedReportId(null)
+    } else {
+      setExpandedReportId(id)
+    }
   }
 
-  // Reset form
-  const handleReset = () => {
-    setInputText('')
-    setTaskId(null)
-    setTaskStatus('PENDING')
-    setReport(null)
-    setError(null)
-    setAllReports(null)
-    // Refetch reports to ensure list is up to date
-    getAllReports().then(setAllReports).catch(console.error)
+  // Helper component for rendering report content
+  const ReportDetail = ({ reportResult, createAt }: { reportResult: string, createAt: string }) => {
+    let parsedResult;
+    try {
+      parsedResult = JSON.parse(reportResult);
+    } catch {
+      parsedResult = null;
+    }
+
+    if (!parsedResult) {
+      return (
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 mt-4">
+          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">{reportResult}</pre>
+        </div>
+      )
+    }
+
+    return (
+      <div className="mt-4 space-y-6 animate-fadeIn">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Summary</h3>
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-gray-900 leading-relaxed">{parsedResult.summary}</p>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Key Points</h3>
+          <ul className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            {parsedResult.key_points?.map((point: string, index: number) => (
+              <li key={index} className="flex items-start gap-2">
+                <span className="text-blue-600 mt-1">•</span>
+                <span className="text-gray-900 flex-1">{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Confidence Score</h3>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
+                style={{ width: `${(parsedResult.confidence_score || 0) * 100}%` }}
+              ></div>
+            </div>
+            <span className="text-sm font-medium text-gray-700 min-w-[3rem] text-right">
+              {(parsedResult.confidence_score || 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-gray-200">
+          <p className="text-xs text-gray-500">
+            Created At: {new Date(createAt).toLocaleString('en-US')}
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Title */}
-        <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">
-          LLM Report Generation
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">LLM Report Generation</h1>
 
         {/* Input Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-8">
           <div className="mb-4">
             <label htmlFor="input-text" className="block text-sm font-medium text-gray-700 mb-2">
               Enter Text Content
@@ -143,164 +155,93 @@ function App() {
               id="input-text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              rows={8}
+              rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Enter the text to analyze here..."
-              disabled={taskStatus === 'PROCESSING'}
             />
           </div>
 
           <div className="flex gap-4">
             <button
               type="submit"
-              disabled={!inputText.trim() || taskStatus === 'PROCESSING'}
+              disabled={!inputText.trim()}
               className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
-              {taskStatus === 'PROCESSING' ? 'PROCESSING...' : 'Submit'}
+              Submit New Task
             </button>
-
-            {(taskStatus === 'COMPLETED' || taskStatus === 'FAILED' || error) && (
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-              >
-                Reset
-              </button>
-            )}
           </div>
         </form>
 
-        {/* Status Display Area */}
-        {(taskId || taskStatus !== 'PENDING' || error) && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Task Status</h2>
-
-            {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-red-800">{error}</p>
-              </div>
-            )}
-
-            {taskId && (
-              <div className="mb-2">
-                <span className="text-sm text-gray-600">Task ID: </span>
-                <span className="text-sm font-mono text-gray-900">{taskId}</span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">Status: </span>
-              <span className={`text-sm font-semibold ${taskStatus === 'PENDING' ? 'text-gray-500' :
-                taskStatus === 'PROCESSING' ? 'text-blue-600' :
-                  taskStatus === 'COMPLETED' ? 'text-green-600' :
-                    'text-red-600'
-                }`}>
-                {taskStatus === 'PENDING' && 'PENDING'}
-                {taskStatus === 'PROCESSING' && 'PROCESSING...'}
-                {taskStatus === 'COMPLETED' && 'COMPLETED'}
-                {taskStatus === 'FAILED' && 'FAILED'}
-              </span>
-              {taskStatus === 'PROCESSING' && (
-                <span className="inline-block w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
-              )}
-            </div>
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-800">{error}</p>
           </div>
         )}
 
-        {/* Result Display Area */}
-        {report && taskStatus === 'COMPLETED' && (() => {
-          // Parse json reportResult from backend
-          let parsedResult;
-          try {
-            parsedResult = JSON.parse(report.reportResult);
-          } catch {
-            parsedResult = null;
-          }
-
-          return (
-            <div ref={resultRef} className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Report Result</h2>
-
-              {parsedResult ? (
-                <div className="space-y-6">
-                  {/* Summary Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Summary</h3>
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <p className="text-gray-900 leading-relaxed">{parsedResult.summary}</p>
-                    </div>
-                  </div>
-
-                  {/* Key Points Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Key Points</h3>
-                    <ul className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      {parsedResult.key_points?.map((point: string, index: number) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <span className="text-blue-600 mt-1">•</span>
-                          <span className="text-gray-900 flex-1">{point}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Confidence Score Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Confidence Score</h3>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
-                        <div
-                          className="bg-linear-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
-                          style={{ width: `${(parsedResult.confidence_score || 0) * 100}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-sm font-medium text-gray-700 min-w-12 text-right">
-                        {(parsedResult.confidence_score || 0).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Timestamp */}
-                  <div className="pt-4 border-t border-gray-200">
-                    <p className="text-xs text-gray-500">
-                      Created At: {new Date(report.createAt).toLocaleString('en-US')}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                // show original content if parse failed
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
-                    {report.reportResult}
-                  </pre>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* show all reports */}
+        {/* Reports List */}
         {allReports && allReports.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">All Reports</h2>
-            <ul className="space-y-2">
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">All Reports</h2>
+            </div>
+            <ul className="divide-y divide-gray-200">
               {[...allReports]
                 .sort((a, b) => new Date(b.createAt).getTime() - new Date(a.createAt).getTime())
                 .map((report: ReportResponse) => (
-                  <li key={report.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-900">Task {report.id}</span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(report.createAt).toLocaleString()}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => handleViewReport(report)}
-                      className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                  <li key={report.id} className="hover:bg-gray-50 transition-colors">
+                    <div
+                      className="p-4 cursor-pointer"
+                      onClick={() => toggleReport(report.id)}
                     >
-                      View
-                    </button>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold
+                                    ${report.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                              report.status === 'PROCESSING' || report.status === 'PENDING' ? 'bg-blue-100 text-blue-700' :
+                                'bg-red-100 text-red-700'}`}>
+                            {report.id}
+                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-gray-900">
+                              Status: <span className={
+                                report.status === 'COMPLETED' ? 'text-green-600' :
+                                  report.status === 'FAILED' ? 'text-red-600' : 'text-blue-600'
+                              }>{report.status}</span>
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(report.createAt).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {report.status === 'PROCESSING' && (
+                            <span className="inline-block w-2 h-2 bg-blue-600 rounded-full animate-pulse mr-2"></span>
+                          )}
+                          <svg
+                            className={`w-5 h-5 text-gray-400 transform transition-transform ${expandedReportId === report.id ? 'rotate-180' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+
+                      {/* Expanded Content */}
+                      {expandedReportId === report.id && report.status === 'COMPLETED' && report.reportResult && (
+                        <div className="mt-4 border-t border-gray-100 pt-4 cursor-auto" onClick={(e) => e.stopPropagation()}>
+                          <ReportDetail reportResult={report.reportResult} createAt={report.createAt} />
+                        </div>
+                      )}
+
+                      {expandedReportId === report.id && report.status === 'FAILED' && (
+                        <div className="mt-4 border-t border-gray-100 pt-4">
+                          <p className="text-sm text-red-600">Task failed. Please check the backend logs or try again.</p>
+                        </div>
+                      )}
+                    </div>
                   </li>
                 ))}
             </ul>
