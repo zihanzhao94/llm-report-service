@@ -59,10 +59,6 @@ public class AsyncProcessService {
             // execute llm logic
             String result = llmService.generateReport(task.getUserInput());
 
-            // mock
-            // Thread.sleep(5000);
-            // String result = "Create llm with task id" + taskId;
-
             // update status to completed (set entity object)
             task.setStatus(ReportTask.TaskStatus.COMPLETED);
             task.setReportResult(result);

@@ -44,7 +44,7 @@ function App() {
 
   // Poll ALL reports if any is processing
   useEffect(() => {
-    // Check if we need to poll (if any report is processing)
+    // Check if we need to poll (if any report is processing or pending)
     const hasProcessingTasks = allReports?.some(r => r.status === 'PROCESSING' || r.status === 'PENDING');
 
     if (!hasProcessingTasks) {
@@ -104,6 +104,15 @@ function App() {
           </div>
         </div>
 
+        {parsedResult.analysis && (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Deep Dive Analysis</h3>
+            <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+              <p className="text-gray-900 leading-relaxed italic">{parsedResult.analysis}</p>
+            </div>
+          </div>
+        )}
+
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Key Points</h3>
           <ul className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -115,6 +124,20 @@ function App() {
             ))}
           </ul>
         </div>
+
+        {parsedResult.recommendations && (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Strategic Recommendations</h3>
+            <ul className="space-y-2 p-4 bg-green-50 rounded-lg border border-green-200">
+              {parsedResult.recommendations?.map((item: string, index: number) => (
+                <li key={index} className="flex items-start gap-2">
+                  <span className="text-green-600 mt-1">→</span>
+                  <span className="text-gray-900 flex-1">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Confidence Score</h3>

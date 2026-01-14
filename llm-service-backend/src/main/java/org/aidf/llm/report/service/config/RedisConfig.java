@@ -11,15 +11,16 @@ import org.springframework.data.redis.serializer.RedisSerializationContext;
 
 import java.time.Duration;
 
+//  Set up Redis cache manager
 @Configuration
 public class RedisConfig {
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        //都返回RedisCacheConfiguration，可以一直点下去
         RedisCacheConfiguration redisCacheConfiguration = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(10))
                 .disableCachingNullValues()
-                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new Jackson2JsonRedisSerializer<>(ReportResponse.class)));
+                .serializeValuesWith(RedisSerializationContext.SerializationPair
+                        .fromSerializer(new Jackson2JsonRedisSerializer<>(ReportResponse.class)));
 
         return RedisCacheManager.builder(connectionFactory).cacheDefaults(redisCacheConfiguration).build();
     }
