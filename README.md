@@ -15,30 +15,6 @@ This is a Monorepo for an LLM-based intelligent report generation system, contai
     *   *Solution*: Asynchronous background processing + Redis caching ensures rapid response times and high availability.
 4.  **Integration Complexity**: connecting AI models to legacy systems is hard.
     *   *Solution*: A clean, dockeriazed microservice architecture with standard RESTful APIs.
-## 🏗 System Architecture
-
-```mermaid
-graph TD
-    Client[User / Browser] -->|HTTP Request| FE[Frontend (React + Vite)]
-    FE -->|REST API| BE[Backend Service (Spring Boot)]
-    BE -->|Read/Write| DB[(MySQL Database)]
-    BE -->|Cache / Task Queue| Redis[(Redis)]
-    BE -->|Model Inference| LLM[OpenAI API]
-    
-    subgraph Docker Network
-        FE
-        BE
-        DB
-        Redis
-    end
-
-    style FE fill:#61dafb,stroke:#333,stroke-width:2px,color:black
-    style BE fill:#6db33f,stroke:#333,stroke-width:2px,color:white
-    style DB fill:#4479a1,stroke:#333,stroke-width:2px,color:white
-    style Redis fill:#d82c20,stroke:#333,stroke-width:2px,color:white
-    style LLM fill:#00a67e,stroke:#333,stroke-width:2px,color:white
-```
-
 ## 🛠 Tech Stack
 
 ### Frontend
