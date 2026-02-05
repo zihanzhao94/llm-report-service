@@ -43,7 +43,7 @@ public class LlmService {
                         "  \"summary\": \"A detailed executive summary (at least 3 sentences)\",\n" +
                         "  \"key_points\": [\"Insight 1\", \"Insight 2\", \"Insight 3\", \"Insight 4\", \"Insight 5\"],\n"
                         +
-                        "  \"analysis\": \"A deep dive analysis of the content, discussing implications and context (at least 500 words)\",\n"
+                        "  \"analysis\": \"A deep dive analysis of the content, discussing implications and context (at least 300 words)\",\n"
                         +
                         "  \"recommendations\": [\"Actionable item 1\", \"Actionable item 2\"],\n" +
                         "  \"confidence_score\": \n" +

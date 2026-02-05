@@ -31,6 +31,10 @@ This is a Monorepo for an LLM-based intelligent report generation system, contai
 - **Redis** (Cache & Data Structures)
 - **OpenAI Java SDK**
 
+## 🏗 Architecture
+
+![Architecture Diagram](docs/architecture.png)
+
 ## 📂 Project Structure
 
 The project uses a Monorepo structure to manage both frontend and backend code:
